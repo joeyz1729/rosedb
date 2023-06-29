@@ -12,9 +12,10 @@ import (
 
 type (
 	RoseDB struct {
-		activeFile    ActiveFiles
+		activeFile    ActiveFiles // active data file
 		activeFileIds ActiveFileIds
-		archFiles     ArchivedFiles
+
+		archFiles ArchivedFiles // already archived data file f
 
 		strIndex StrIdx
 
