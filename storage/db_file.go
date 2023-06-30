@@ -21,8 +21,8 @@ const (
 )
 
 var (
-	// DBFileFormatName default format of data file name.
-	DBFileFormatName = map[uint16]string{
+	// DBFileFormatNames default format of data file name.
+	DBFileFormatNames = map[uint16]string{
 		0: "%09d.data.str",
 		1: "%09d.data.list",
 		2: "%09d.data.hash",
@@ -58,7 +58,7 @@ type DBFile struct {
 
 // NewDBFile create a new db file
 func NewDBFile(path string, fileId uint32, method FileRWMethod, blockSize int64, eType uint16) (*DBFile, error) {
-	filePath := path + PathSeparator + fmt.Sprintf(DBFileFormatName[eType], fileId)
+	filePath := path + PathSeparator + fmt.Sprintf(DBFileFormatNames[eType], fileId)
 
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, FilePerm)
 	if err != nil {

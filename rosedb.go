@@ -3,11 +3,12 @@ package rosedb
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 	"zouyi/rosedb/index"
@@ -88,7 +89,6 @@ func Open(config Config) (*RoseDB, error) {
 
 		expires: make(Expires),
 	}
-
 	for i := 0; i < DataStructureNum; i++ {
 		db.expires[uint16(i)] = make(map[string]int64)
 	}
@@ -99,116 +99,295 @@ func Open(config Config) (*RoseDB, error) {
 	return db, nil
 }
 
-// Close RoseDB file
-func (db *RoseDB) Close() error {
-	if db.dbFile == nil {
-		return errors.New("invalid db file")
+// Reopen the db according to specific config path.
+func Reopen(path string) (*RoseDB, error) {
+	if exist := utils.Exist(path + configSaveFile); !exist {
+		return nil, ErrCfgNotExist
 	}
-	return db.dbFile.File.Close()
+
+	var config Config
+	b, err := ioutil.ReadFile(path + configSaveFile)
+
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &config); err != nil {
+		return nil, err
+	}
+	return Open(config)
 }
 
-func (db *RoseDB) Merge() error {
-	if db.dbFile.Offset == 0 {
+// Close RoseDB
+func (db *RoseDB) Close() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if err := db.saveConfig(); err != nil {
+		return err
+	}
+	if err := db.saveMeta(); err != nil {
+		return err
+	}
+
+	for _, file := range db.activeFile {
+		if err := file.Close(true); err != nil {
+			return err
+		}
+	}
+
+	for _, archFile := range db.archFiles {
+		for _, file := range archFile {
+			if err := file.Sync(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+
+}
+
+func (db *RoseDB) Sync() error {
+	if db == nil || db.activeFile == nil {
 		return nil
 	}
 
-	var (
-		validEntries []*Entry
-		offset       int64
-	)
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	for {
-		entry, err := db.dbFile.Read(offset)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
+	for _, file := range db.activeFile {
+		if err := file.Sync(); err != nil {
 			return err
 		}
-
-		if off, ok := db.indexes[string(entry.Key)]; ok && off == offset {
-			validEntries = append(validEntries, entry)
-		}
-		offset += entry.GetSize()
 	}
-
-	if len(validEntries) > 0 {
-		// create new temporary file
-		mergeDbFile, err := storage.NewMergeDBFile(db.dirPath)
-		if err != nil {
-			return err
-		}
-		defer os.Remove(mergeDbFile.File.Name())
-
-		db.mu.Lock()
-		defer db.mu.Unlock()
-
-		for _, entry := range validEntries {
-			// write valid entry into new file
-			writeOff := mergeDbFile.Offset
-			err := mergeDbFile.Write(entry)
-			if err != nil {
-				return err
-			}
-
-			// update entry index
-			db.indexes[string(entry.Key)] = writeOff
-		}
-
-		// remove old db file
-		dbFilename := db.dbFile.File.Name()
-		db.dbFile.File.Close()
-		os.Remove(dbFilename)
-
-		// rename new  db file
-		mergeDbFilename := mergeDbFile.File.Name()
-		os.Rename(mergeDbFilename, filepath.Join(db.dirPath, storage.Filename))
-
-		// replace db file
-		db.dbFile = mergeDbFile
-	}
-
 	return nil
 }
 
-func (db *RoseDB) Put(key []byte, value []byte) (err error) {
-	if len(key) == 0 {
-		return
+func (db *RoseDB) Reclaim() (err error) {
+	if db.isSingleReclaiming {
+		return ErrDBisReclaiming
 	}
+	var reclaimable bool
+	for _, archFiles := range db.archFiles {
+		if len(archFiles) >= db.config.ReclaimThreshold {
+			reclaimable = true
+			break
+		}
+	}
+	if !reclaimable {
+		return ErrReclaimUnreached
+	}
+
+	reclaimPath := db.config.DirPath + reclaimPath
+	if err := os.MkdirAll(reclaimPath, os.ModePerm); err != nil {
+		return err
+	}
+	defer os.RemoveAll(reclaimPath)
+
 	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer func() {
+		db.isReclaiming = false
+		db.mu.Unlock()
+	}()
+	db.isReclaiming = true
 
-	// create entry record
-	offset := db.dbFile.Offset
-	entry := NewEntry(key, value, PUT)
+	newArchivedFiles := sync.Map{}
+	reclaimedTypes := sync.Map{}
+	wg := sync.WaitGroup{}
+	wg.Add(DataStructureNum)
+	for i := 0; i < DataStructureNum; i++ {
+		go func(dType uint16) {
+			defer func() {
+				wg.Done()
+			}()
 
-	// append to db file
-	err = db.dbFile.Write(entry)
+			if len(db.archFiles[dType]) < db.config.ReclaimThreshold {
+				newArchivedFiles.Store(dType, db.archFiles[dType])
+				return
+			}
 
-	// write into storage
-	db.indexes[string(key)] = offset
+			var (
+				df        *storage.DBFile
+				fileId    uint32
+				archFiles = make(map[uint32]*storage.DBFile)
+				fileIds   []int
+			)
+
+			for _, file := range db.archFiles[dType] {
+				fileIds = append(fileIds, int(file.Id))
+			}
+			sort.Ints(fileIds)
+
+			for _, fid := range fileIds {
+				file := db.archFiles[dType][uint32(fid)]
+				var offset int64 = 0
+				var reclaimEntries []*storage.Entry
+
+				// read all entries in db file, and find the valid entry.
+				for {
+					if e, err := file.Read(offset); err == nil {
+						if db.validEntry(e, offset, file.Id) {
+							reclaimEntries = append(reclaimEntries, e)
+						}
+						offset += int64(e.Size())
+					} else {
+						if err == io.EOF {
+							break
+						}
+						log.Fatalf("err occurred when read the entry: %+v", err)
+						return
+					}
+				}
+
+				// rewrite the valid entries to new db file.
+				for _, entry := range reclaimEntries {
+					if df == nil || int64(entry.Size())+df.Offset > db.config.BlockSize {
+						df, err = storage.NewDBFile(reclaimPath, fileId, db.config.RwMethod, db.config.BlockSize, dType)
+						if err != nil {
+							log.Fatalf("err occurred when create new db file: %+v", err)
+							return
+						}
+
+						if err = df.Write(entry); err != nil {
+							log.Fatalf("err occurred when write the entry: %+v", err)
+							return
+						}
+
+						if dType == String {
+							item := db.strIndex.idxList.Get(entry.Meta.Key)
+							idx := item.Value().(*index.Indexer)
+							idx.Offset = offset
+							idx.FileId = fileId
+							db.strIndex.idxList.Put(idx.Meta.Key, idx)
+						}
+					}
+				}
+
+			}
+			reclaimedTypes.Store(dType, struct{}{})
+			newArchivedFiles.Store(dType, archFiles)
+		}(uint16(i))
+	}
+	wg.Wait()
+
+	dbArchivedFiles := make(ArchivedFiles)
+	for i := 0; i < DataStructureNum; i++ {
+		dType := uint16(i)
+		value, ok := newArchivedFiles.Load(dType)
+		if !ok {
+			log.Printf("one type of data(%d) is missed after reclaiming.", dType)
+			return
+		}
+		dbArchivedFiles[dType] = value.(map[uint32]*storage.DBFile)
+	}
+
+	// delete old db files.
+	for dataType, files := range db.archFiles {
+		if _, exist := reclaimedTypes.Load(dataType); exist {
+			for _, f := range files {
+				_ = os.Remove(f.File.Name())
+			}
+		}
+	}
+
+	// copy
+	for dataType, files := range dbArchivedFiles {
+		if _, exist := reclaimedTypes.Load(dataType); exist {
+			for _, f := range files {
+				name := storage.PathSeparator + fmt.Sprintf(storage.DBFileFormatNames[dataType], f.Id)
+				os.Rename(reclaimPath+name, db.config.DirPath+name)
+			}
+		}
+	}
+
+	db.archFiles = dbArchivedFiles
 	return
 }
 
-func (db *RoseDB) Del(key []byte) (err error) {
-	if len(key) == 0 {
-		return
+// SingleReclaim only support String type.
+func (db *RoseDB) SingleReclaim() (err error) {
+	if db.isReclaiming {
+		return ErrDBisReclaiming
 	}
+
+	reclaimPath := db.config.DirPath + reclaimPath
+	if err := os.MkdirAll(reclaimPath, os.ModePerm); err != nil {
+		return err
+	}
+	defer os.RemoveAll(reclaimPath)
 
 	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer func() {
+		db.isSingleReclaiming = false
+		db.mu.Unlock()
+	}()
 
-	_, ok := db.indexes[string(key)]
-	if !ok {
-		return
+	db.isSingleReclaiming = true
+	var fileIds []int
+	for _, file := range db.archFiles[String] {
+		fileIds = append(fileIds, int(file.Id))
 	}
 
-	entry := NewEntry(key, nil, DEL)
-	err = db.dbFile.Write(entry)
-	if err != nil {
-		return
+	sort.Ints(fileIds)
+
+	for _, fid := range fileIds {
+		file := db.archFiles[String][uint32(fid)]
+
+		if db.meta.ReclaimableSpace[file.Id] < db.config.SingleReclaimThreshold {
+			continue
+		}
+
+		var (
+			readOff      int64
+			validEntries []*storage.Entry
+		)
+
+		for {
+			entry, err := file.Read(readOff)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return err
+			}
+			if db.validEntry(entry, readOff, uint32(fid)) {
+				validEntries = append(validEntries, entry)
+			}
+			readOff += int64(entry.Size())
+		}
+
+		if len(validEntries) == 0 {
+			os.Remove(file.File.Name())
+			delete(db.meta.ReclaimableSpace, uint32(fid))
+			delete(db.archFiles[String], uint32(fid))
+			continue
+		}
+
+		df, err := storage.NewDBFile(reclaimPath, uint32(fid), db.config.RwMethod, db.config.BlockSize, String)
+		if err != nil {
+			return err
+		}
+		for _, e := range validEntries {
+			if err := df.Write(e); err != nil {
+				return err
+			}
+
+			item := db.strIndex.idxList.Get(e.Meta.Key)
+			idx := item.Value().(*index.Indexer)
+			idx.Offset = df.Offset - int64(e.Size())
+			idx.FileId = uint32(fid)
+			db.strIndex.idxList.Put(idx.Meta.Key, idx)
+		}
+
+		os.Remove(file.File.Name())
+
+		name := storage.PathSeparator + fmt.Sprintf(storage.DBFileFormatNames[String], fid)
+
+		os.Rename(reclaimPath+name, db.config.DirPath+name)
+
+		db.meta.ReclaimableSpace[uint32(fid)] = 0
+		db.archFiles[String][uint32(fid)] = df
 	}
-	delete(db.indexes, string(key))
+
 	return
 }
 
@@ -424,9 +603,6 @@ func (db *RoseDB) checkExpired(key []byte, dType DataType) (expired bool) {
 			}
 		case List:
 			e = storage.NewEntryNoExtra(key, nil, List, ListLClear)
-			var l *list.List
-			l = db.listIndex.indexes
-			l.LClear(string(key))
 			db.listIndex.indexes.LClear(string(key))
 		case Hash:
 			e = storage.NewEntryNoExtra(key, nil, Hash, HashHClear)
