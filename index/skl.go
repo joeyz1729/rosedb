@@ -1,5 +1,8 @@
 package index
 
+// SkipList is the implementation of skip list, skip list is an efficient data structure that can replace the balanced binary search tree.
+// It can insert, delete, and query in O(logN) time complexity average.
+// For a specific explanation of the skip list,  you can refer to Wikipedia: https://en.wikipedia.org/wiki/Skip_list.
 import (
 	"bytes"
 	"math"
@@ -8,67 +11,78 @@ import (
 )
 
 const (
+	// the max level of the skl indexes, can be adjusted according to the actual situation.
 	maxLevel    int     = 18
 	probability float64 = 1 / math.E
 )
 
+// iterate the skl node, ends when the return value is false.
 type handleEle func(e *Element) bool
 
 type (
+	// Node the skip list node.
 	Node struct {
 		next []*Element
 	}
 
+	// Element element is the data stored.
 	Element struct {
 		Node
 		key   []byte
 		value interface{}
 	}
 
+	// SkipList define the skip list.
 	SkipList struct {
 		Node
-		maxLevel      int
-		Len           int
-		randSource    rand.Source
-		probability   float64
-		probTable     []float64
-		prevNodeCache []*Node
+		maxLevel       int
+		Len            int
+		randSource     rand.Source
+		probability    float64
+		probTable      []float64
+		prevNodesCache []*Node
 	}
 )
 
-// NewSkipList define the skip list
+// NewSkipList create a new skip list.
 func NewSkipList() *SkipList {
 	return &SkipList{
-		Node:          Node{next: make([]*Element, maxLevel)},
-		prevNodeCache: make([]*Node, maxLevel),
-		maxLevel:      maxLevel,
-		randSource:    rand.New(rand.NewSource(time.Now().UnixNano())),
-		probability:   probability,
-		probTable:     probabilityTable(probability, maxLevel),
+		Node:           Node{next: make([]*Element, maxLevel)},
+		prevNodesCache: make([]*Node, maxLevel),
+		maxLevel:       maxLevel,
+		randSource:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		probability:    probability,
+		probTable:      probabilityTable(probability, maxLevel),
 	}
 }
 
-// Key of element
+// Key the key of the Element.
 func (e *Element) Key() []byte {
 	return e.key
 }
 
-// Value of element
+// Value the value of the Element.
 func (e *Element) Value() interface{} {
 	return e.value
 }
 
-// SetValue set value of element
+// SetValue set the element value.
 func (e *Element) SetValue(val interface{}) {
 	e.value = val
 }
 
-// Next the first-level index of the skip list is the original data,
+// Next the first-level index of the skip list is the original data, which is arranged in an orderly manner.
+// A linked list of all data in series can be obtained according to the Next method.
 func (e *Element) Next() *Element {
 	return e.next[0]
 }
 
-// Front first element of skip list
+// Front first element.
+// Get the head element of skl, and get all data by traversing backward.
+//	e := list.Front()
+//	for p := e; p != nil; p = p.Next() {
+//		//do something with Element p
+//	}
 func (t *SkipList) Front() *Element {
 	return t.next[0]
 }
@@ -100,7 +114,7 @@ func (t *SkipList) Put(key []byte, value interface{}) *Element {
 	return element
 }
 
-// Get find value by key, returns nil if not found.
+// Get find value by the key, returns nil if not found.
 func (t *SkipList) Get(key []byte) *Element {
 	var prev = &t.Node
 	var next *Element
@@ -117,15 +131,16 @@ func (t *SkipList) Get(key []byte) *Element {
 	if next != nil && bytes.Compare(next.key, key) <= 0 {
 		return next
 	}
+
 	return nil
 }
 
-// Exist return if exists the key in skip list.
+// Exist check if exists the key in skl.
 func (t *SkipList) Exist(key []byte) bool {
 	return t.Get(key) != nil
 }
 
-// Remove element by key.
+// Remove element by the key.
 func (t *SkipList) Remove(key []byte) *Element {
 	prev := t.backNodes(key)
 
@@ -149,6 +164,27 @@ func (t *SkipList) Foreach(fun handleEle) {
 	}
 }
 
+// find the previous node at the key.
+func (t *SkipList) backNodes(key []byte) []*Node {
+	var prev = &t.Node
+	var next *Element
+
+	prevs := t.prevNodesCache
+
+	for i := t.maxLevel - 1; i >= 0; i-- {
+		next = prev.next[i]
+
+		for next != nil && bytes.Compare(key, next.key) > 0 {
+			prev = &next.Node
+			next = next.next[i]
+		}
+
+		prevs[i] = prev
+	}
+
+	return prevs
+}
+
 // FindPrefix find the first element that matches the prefix.
 func (t *SkipList) FindPrefix(prefix []byte) *Element {
 	var prev = &t.Node
@@ -170,37 +206,7 @@ func (t *SkipList) FindPrefix(prefix []byte) *Element {
 	return next
 }
 
-// backNodes the previous node at the key
-func (t *SkipList) backNodes(key []byte) []*Node {
-	var prev = &t.Node
-	var next *Element
-
-	prevs := t.prevNodeCache
-
-	for i := t.maxLevel - 1; i >= 0; i-- {
-		next = prev.next[i]
-
-		for next != nil && bytes.Compare(key, next.key) > 0 {
-			prev = &next.Node
-			next = next.next[i]
-		}
-
-		prevs[i] = prev
-	}
-
-	return prevs
-}
-
-// probabilityTable create probability table
-func probabilityTable(probability float64, maxLevel int) (table []float64) {
-	for i := 1; i <= maxLevel; i++ {
-		prob := math.Pow(probability, float64(i-1))
-		table = append(table, prob)
-	}
-	return table
-}
-
-// randomLevel generate index level
+// generate random index level.
 func (t *SkipList) randomLevel() (level int) {
 	r := float64(t.randSource.Int63()) / (1 << 63)
 
@@ -209,4 +215,12 @@ func (t *SkipList) randomLevel() (level int) {
 		level++
 	}
 	return
+}
+
+func probabilityTable(probability float64, maxLevel int) (table []float64) {
+	for i := 1; i <= maxLevel; i++ {
+		prob := math.Pow(probability, float64(i-1))
+		table = append(table, prob)
+	}
+	return table
 }

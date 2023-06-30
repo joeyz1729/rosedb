@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"zouyi/rosedb"
+	"zouyi/minidb"
 )
 
 type ExecCmdFunc func(*rosedb.RoseDB, []string) (interface{}, error)
@@ -73,7 +73,7 @@ func (s *Server) handleCmd(conn redcon.Conn, cmd redcon.Command) {
 		}
 	}()
 
-	command := strings.TOLower(string(cmd.Args[0]))
+	command := strings.ToLower(string(cmd.Args[0]))
 	exec, exist := ExecCmd[command]
 	if !exist {
 		conn.WriteError(fmt.Sprintf("Err unknown command '%s'", command))

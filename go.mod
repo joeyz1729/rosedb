@@ -5,9 +5,10 @@ go 1.20
 require (
 	github.com/pelletier/go-toml v1.9.5
 	github.com/stretchr/testify v1.7.0
-	github.com/tidwall/redcon v1.6.2
 	golang.org/x/sys v0.9.0
 )
+
+require github.com/tidwall/redcon v1.6.2
 
 require (
 	github.com/davecgh/go-spew v1.1.0 // indirect

@@ -6,15 +6,15 @@ import (
 	"os"
 )
 
-// DBMeta save some meta info of db.
+// Save some extra info of rosedb, other config may be added in the future.
 type DBMeta struct {
-	ActiveWriteOff   map[uint16]int64 `json:"active_write_off"`
-	ReclaimableSpace map[uint32]int64 `json:"reclaimable_space"`
+	ActiveWriteOff   map[uint16]int64 `json:"active_write_off"`  // Write offset of current active db files.
+	ReclaimableSpace map[uint32]int64 `json:"reclaimable_space"` // Reclaimable space in each db file of String, for single reclaiming.
 }
 
 // LoadMeta load db meta from file.
-func LoadMeta(path string) (meta *DBMeta) {
-	meta = &DBMeta{
+func LoadMeta(path string) (m *DBMeta) {
+	m = &DBMeta{
 		ActiveWriteOff:   make(map[uint16]int64),
 		ReclaimableSpace: make(map[uint32]int64),
 	}
@@ -26,19 +26,19 @@ func LoadMeta(path string) (meta *DBMeta) {
 	defer file.Close()
 
 	b, _ := ioutil.ReadAll(file)
-	_ = json.Unmarshal(b, meta)
+	_ = json.Unmarshal(b, m)
 	return
-
 }
 
 // Store store db meta as json.
-func (meta *DBMeta) Store(path string) error {
+func (m *DBMeta) Store(path string) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
-	b, _ := json.Marshal(meta)
+	b, _ := json.Marshal(m)
 	_, err = file.Write(b)
 	return err
 }

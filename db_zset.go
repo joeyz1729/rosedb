@@ -4,9 +4,9 @@ import (
 	"math"
 	"sync"
 	"time"
-	"zouyi/rosedb/ds/zset"
-	"zouyi/rosedb/storage"
-	"zouyi/rosedb/utils"
+	"zouyi/minidb/ds/zset"
+	"zouyi/minidb/storage"
+	"zouyi/minidb/utils"
 )
 
 // ZsetIdx the zset idx.

@@ -1,6 +1,6 @@
 package rosedb
 
-import "zouyi/rosedb/storage"
+import "zouyi/minidb/storage"
 
 type DataIndexMode int
 
