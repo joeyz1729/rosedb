@@ -1,12 +1,12 @@
 package rosedb
 
 import (
-	"github.com/roseduan/rosedb/ds/zset"
-	"github.com/roseduan/rosedb/storage"
-	"github.com/roseduan/rosedb/utils"
 	"math"
 	"sync"
 	"time"
+	"zouyi/rosedb/ds/zset"
+	"zouyi/rosedb/storage"
+	"zouyi/rosedb/utils"
 )
 
 // ZsetIdx the zset idx.

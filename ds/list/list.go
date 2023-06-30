@@ -5,23 +5,33 @@ import (
 	"reflect"
 )
 
+// List is the implementation of doubly linked list.
+
+// InsertOption insert option for LInsert.
 type InsertOption uint8
 
 const (
+	// Before insert before pivot.
 	Before InsertOption = iota
+	// After insert after pivot.
 	After
 )
 
 type (
+	// List list idx.
 	List struct {
+		// record saves the List of a specified key.
 		record Record
 
+		// values saves the values of a List, help checking if a value exists in List.
 		values map[string]map[string]int
 	}
 
+	// Record list record to save.
 	Record map[string]*list.List
 )
 
+// New create a new list idx.
 func New() *List {
 	return &List{
 		make(Record),
@@ -29,36 +39,52 @@ func New() *List {
 	}
 }
 
+// LPush insert all the specified values at the head of the list stored at key.
+// If key does not exist, it is created as empty list before performing the push operations.
 func (lis *List) LPush(key string, val ...[]byte) int {
 	return lis.push(true, key, val...)
 }
 
+// LPop removes and returns the first elements of the list stored at key.
 func (lis *List) LPop(key string) []byte {
 	return lis.pop(true, key)
 }
 
+// RPush insert all the specified values at the tail of the list stored at key.
+// If key does not exist, it is created as empty list before performing the push operation.
 func (lis *List) RPush(key string, val ...[]byte) int {
 	return lis.push(false, key, val...)
 }
 
+// RPop removes and returns the last elements of the list stored at key.
 func (lis *List) RPop(key string) []byte {
 	return lis.pop(false, key)
 }
 
-func (lis *List) LIndex(key string, index int) (val []byte) {
+// LIndex returns the element at index index in the list stored at key.
+// The index is zero-based, so 0 means the first element, 1 the second element and so on.
+// Negative indices can be used to designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so forth.
+func (lis *List) LIndex(key string, index int) []byte {
 	ok, newIndex := lis.validIndex(key, index)
 	if !ok {
 		return nil
 	}
 
 	index = newIndex
+	var val []byte
 	e := lis.index(key, index)
 	if e != nil {
 		val = e.Value.([]byte)
 	}
-	return
+
+	return val
 }
 
+// LRem removes the first count occurrences of elements equal to element from the list stored at key.
+// The count argument influences the operation in the following ways:
+// count > 0: Remove elements equal to element moving from head to tail.
+// count < 0: Remove elements equal to element moving from tail to head.
+// count = 0: Remove all elements equal to element.
 func (lis *List) LRem(key string, val []byte, count int) int {
 	item := lis.record[key]
 	if item == nil {
@@ -105,6 +131,7 @@ func (lis *List) LRem(key string, val []byte, count int) int {
 	return length
 }
 
+// LInsert inserts element in the list stored at key either before or after the reference value pivot.
 func (lis *List) LInsert(key string, option InsertOption, pivot, val []byte) int {
 	e := lis.find(key, pivot)
 	if e == nil {
@@ -127,6 +154,7 @@ func (lis *List) LInsert(key string, option InsertOption, pivot, val []byte) int
 	return item.Len()
 }
 
+// LSet sets the list element at index to element.
 func (lis *List) LSet(key string, index int, val []byte) bool {
 	e := lis.index(key, index)
 	if e == nil {
@@ -151,25 +179,30 @@ func (lis *List) LSet(key string, index int, val []byte) bool {
 	e.Value = val
 	lis.values[key][string(val)] += 1
 	return true
-
 }
 
-func (lis *List) LRange(key string, start, end int) (val [][]byte) {
+// LRange returns the specified elements of the list stored at key.
+// The offsets start and stop are zero-based indexes, with 0 being the first element of the list (the head of the list), 1 being the next element and so on.
+// These offsets can also be negative numbers indicating offsets starting at the end of the list.
+// For example, -1 is the last element of the list, -2 the penultimate, and so on.
+func (lis *List) LRange(key string, start, end int) [][]byte {
+	var val [][]byte
 	item := lis.record[key]
 
 	if item == nil || item.Len() <= 0 {
-		return
+		return val
 	}
 
 	length := item.Len()
 	start, end = lis.handleIndex(length, start, end)
 
 	if start > end || start >= length {
-		return
+		return val
 	}
 
 	mid := length >> 1
 
+	// Traverse from left to right.
 	if end <= mid || end-mid < mid-start {
 		flag := 0
 		for p := item.Front(); p != nil && flag <= end; p, flag = p.Next(), flag+1 {
@@ -177,9 +210,9 @@ func (lis *List) LRange(key string, start, end int) (val [][]byte) {
 				val = append(val, p.Value.([]byte))
 			}
 		}
-	} else {
+	} else { // Traverse from right to left.
 		flag := length - 1
-		for p := item.Back(); p != nil && flag >= start; p, flag = p.Next(), flag-1 {
+		for p := item.Back(); p != nil && flag >= start; p, flag = p.Prev(), flag-1 {
 			if flag <= end {
 				val = append(val, p.Value.([]byte))
 			}
@@ -193,11 +226,14 @@ func (lis *List) LRange(key string, start, end int) (val [][]byte) {
 	return val
 }
 
+// LTrim trim an existing list so that it will contain only the specified range of elements specified.
+// Both start and stop are zero-based indexes, where 0 is the first element of the list (the head), 1 the next element and so on.
 func (lis *List) LTrim(key string, start, end int) bool {
 	item := lis.record[key]
 	if item == nil || item.Len() <= 0 {
 		return false
 	}
+
 	length := item.Len()
 	start, end = lis.handleIndex(length, start, end)
 
@@ -251,23 +287,30 @@ func (lis *List) LTrim(key string, start, end int) bool {
 	return true
 }
 
-func (lis *List) LLen(key string) (length int) {
+// LLen returns the length of the list stored at key.
+// If key does not exist, it is interpreted as an empty list and 0 is returned.
+func (lis *List) LLen(key string) int {
+	length := 0
 	if lis.record[key] != nil {
 		length = lis.record[key].Len()
 	}
-	return
+
+	return length
 }
 
+// LClear clear a specified key for List.
 func (lis *List) LClear(key string) {
 	delete(lis.record, key)
 	delete(lis.values, key)
 }
 
+// LKeyExists check if the key of a List exists.
 func (lis *List) LKeyExists(key string) (ok bool) {
 	_, ok = lis.record[key]
 	return
 }
 
+// LValExists check if the val exists in a specified List stored at key.
 func (lis *List) LValExists(key string, val []byte) (ok bool) {
 	if lis.values[key] != nil {
 		cnt := lis.values[key][string(val)]
@@ -317,6 +360,7 @@ func (lis *List) index(key string, index int) *list.Element {
 			e = val
 		}
 	}
+
 	return e
 }
 
@@ -339,8 +383,9 @@ func (lis *List) push(front bool, key string, val ...[]byte) int {
 	return lis.record[key].Len()
 }
 
-func (lis *List) pop(front bool, key string) (val []byte) {
+func (lis *List) pop(front bool, key string) []byte {
 	item := lis.record[key]
+	var val []byte
 
 	if item != nil && item.Len() > 0 {
 		var e *list.Element
@@ -352,7 +397,7 @@ func (lis *List) pop(front bool, key string) (val []byte) {
 
 		val = e.Value.([]byte)
 		item.Remove(e)
-
+		// update value count.
 		if lis.values[key] != nil {
 			cnt := lis.values[key][string(val)] - 1
 			if cnt <= 0 {
@@ -365,7 +410,7 @@ func (lis *List) pop(front bool, key string) (val []byte) {
 	return val
 }
 
-// validIndex check if the index is valid and returns the new index.
+// check if the index is valid and returns the new index.
 func (lis *List) validIndex(key string, index int) (bool, int) {
 	item := lis.record[key]
 	if item == nil || item.Len() <= 0 {
@@ -380,6 +425,7 @@ func (lis *List) validIndex(key string, index int) (bool, int) {
 	return index >= 0 && index < length, index
 }
 
+// handle the value of start and end (negative and corner case).
 func (lis *List) handleIndex(length, start, end int) (int, int) {
 	if start < 0 {
 		start += length

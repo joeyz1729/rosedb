@@ -21,7 +21,7 @@ const (
 	List
 	Hash
 	Set
-	HSet
+	ZSet
 )
 
 type (
@@ -71,11 +71,11 @@ func NewEntryNoExtra(key, value []byte, t, mark uint16) *Entry {
 }
 
 // NewEntryWithExpire create a new entry
-func NewEntryWithExpire(key, value, extra []byte, deadline int64, t, mark uint16) *Entry {
+func NewEntryWithExpire(key, value []byte, deadline int64, t, mark uint16) *Entry {
 	var state uint16 = 0
 	state = state | (t << 8)
 	state = state | mark
-	return newInternal(key, value, extra, state, uint64(deadline))
+	return newInternal(key, value, nil, state, uint64(deadline))
 }
 
 // Size return entry's total size

@@ -2,10 +2,10 @@ package rosedb
 
 import (
 	"bytes"
-	"github.com/roseduan/rosedb/ds/hash"
-	"github.com/roseduan/rosedb/storage"
 	"sync"
 	"time"
+	"zouyi/rosedb/ds/hash"
+	"zouyi/rosedb/storage"
 )
 
 // HashIdx hash index.

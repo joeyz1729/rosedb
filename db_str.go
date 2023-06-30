@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 	"zouyi/rosedb/index"
+	"zouyi/rosedb/storage"
 )
 
 // StrIdx string index.
@@ -37,7 +38,7 @@ func (db *RoseDB) SetNx(key, value []byte) (res uint32, err error) {
 	return
 }
 
-// Get get the value of key. If the key does not exist an error is returned.
+// Get  the value of key. If the key does not exist an error is returned.
 func (db *RoseDB) Get(key []byte) ([]byte, error) {
 	if err := db.checkKeyValue(key, nil); err != nil {
 		return nil, err

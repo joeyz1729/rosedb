@@ -2,12 +2,12 @@ package rosedb
 
 import (
 	"bytes"
-	"github.com/roseduan/rosedb/ds/list"
-	"github.com/roseduan/rosedb/storage"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"zouyi/rosedb/ds/list"
+	"zouyi/rosedb/storage"
 )
 
 // ListIdx the list index.
@@ -85,7 +85,7 @@ func (db *RoseDB) LPop(key []byte) ([]byte, error) {
 	return val, nil
 }
 
-// Removes and returns the last elements of the list stored at key.
+// RPop Removes and returns the last elements of the list stored at key.
 func (db *RoseDB) RPop(key []byte) ([]byte, error) {
 	if err := db.checkKeyValue(key, nil); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (db *RoseDB) RPop(key []byte) ([]byte, error) {
 	return val, nil
 }
 
-// LIndex returns the element at index index in the list stored at key.
+// LIndex returns the element at index in the list stored at key.
 // The index is zero-based, so 0 means the first element, 1 the second element and so on.
 // Negative indices can be used to designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so forth.
 func (db *RoseDB) LIndex(key []byte, idx int) []byte {

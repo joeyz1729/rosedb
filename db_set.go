@@ -1,10 +1,10 @@
 package rosedb
 
 import (
-	"github.com/roseduan/rosedb/ds/set"
-	"github.com/roseduan/rosedb/storage"
 	"sync"
 	"time"
+	"zouyi/rosedb/ds/set"
+	"zouyi/rosedb/storage"
 )
 
 // SetIdx the set idx

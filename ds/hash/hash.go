@@ -1,38 +1,44 @@
 package hash
 
+// the implementation of hash table.
+
 type (
+	// Hash hash table struct.
 	Hash struct {
-		// Hash table struct.
 		record Record
 	}
 
-	// Record hash records to save, key-field-value
+	// Record hash records to save.
 	Record map[string]map[string][]byte
 )
 
+// New create a new hash ds.
 func New() *Hash {
 	return &Hash{make(Record)}
 }
 
-// HSet create or overwritten, key-field-value
+// HSet Sets field in the hash stored at key to value. If key does not exist, a new key holding a hash is created.
+// If field already exists in the hash, it is overwritten.
 func (h *Hash) HSet(key string, field string, value []byte) (res int) {
 	if !h.exist(key) {
 		h.record[key] = make(map[string][]byte)
 	}
 
 	if h.record[key][field] != nil {
-		// overwritten
+		// if this field exists, overwritten it.
 		h.record[key][field] = value
 	} else {
-		// create
+		// create if this field not exists.
 		h.record[key][field] = value
 		res = 1
 	}
 	return
 }
 
-// HSetNx create but not overwritten , key-field-value
-func (h *Hash) HSetNx(key string, field string, value []byte) (res int) {
+// HSetNx sets field in the hash stored at key to value, only if field does not yet exist.
+// If key does not exist, a new key holding a hash is created. If field already exists, this operation has no effect.
+// Return if the operation successful
+func (h *Hash) HSetNx(key string, field string, value []byte) int {
 	if !h.exist(key) {
 		h.record[key] = make(map[string][]byte)
 	}
@@ -44,26 +50,30 @@ func (h *Hash) HSetNx(key string, field string, value []byte) (res int) {
 	return 0
 }
 
-// HGet returns value of key-field
+// HGet returns the value associated with field in the hash stored at key.
 func (h *Hash) HGet(key, field string) []byte {
 	if !h.exist(key) {
 		return nil
 	}
+
 	return h.record[key][field]
 }
 
-// HGetAll returns all fields and values of hash stored at key.
+// HGetAll returns all fields and values of the hash stored at key.
+// In the returned value, every field name is followed by its value, so the length of the reply is twice the size of the hash.
 func (h *Hash) HGetAll(key string) (res [][]byte) {
 	if !h.exist(key) {
 		return
 	}
+
 	for k, v := range h.record[key] {
 		res = append(res, []byte(k), v)
 	}
 	return
 }
 
-// HDel removes the specified fields from hash stored at key.
+// HDel removes the specified fields from the hash stored at key. Specified fields that do not exist within this hash are ignored.
+// If key does not exist, it is treated as an empty hash and this command returns false.
 func (h *Hash) HDel(key, field string) int {
 	if !h.exist(key) {
 		return 0
@@ -106,24 +116,26 @@ func (h *Hash) HKeys(key string) (val []string) {
 	if !h.exist(key) {
 		return
 	}
+
 	for k := range h.record[key] {
 		val = append(val, k)
 	}
 	return
 }
 
-// HValues returns all values in the hash stored at key.
-func (h *Hash) HValues(key string) (val [][]byte) {
+// HVals returns all values in the hash stored at key.
+func (h *Hash) HVals(key string) (val [][]byte) {
 	if !h.exist(key) {
 		return
 	}
+
 	for _, v := range h.record[key] {
 		val = append(val, v)
 	}
 	return
 }
 
-// HClear the key in hash
+// HClear clear the key in hash.
 func (h *Hash) HClear(key string) {
 	if !h.exist(key) {
 		return
