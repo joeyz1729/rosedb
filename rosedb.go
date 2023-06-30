@@ -14,15 +14,22 @@ type (
 	RoseDB struct {
 		activeFile    ActiveFiles // active data file
 		activeFileIds ActiveFileIds
+		archFiles     ArchivedFiles // already archived data file f
 
-		archFiles ArchivedFiles // already archived data file f
+		strIndex  *StrIdx
+		listIndex *ListIdx
+		hashIndex *HashIdx
+		setIndex  *SetIdx
+		zsetIndex *ZsetIdx
 
-		strIndex StrIdx
+		config Config
 
-		indexes map[string]int64
-		dbFile  *storage.DBFile
-		dirPath string
-		mu      sync.Mutex
+		meta *storage.Meta
+
+		expires            Expires
+		isReclaiming       bool
+		isSingleReclaiming bool
+		mu                 sync.Mutex
 	}
 
 	ActiveFiles map[DataType]*storage.DBFile
@@ -35,7 +42,7 @@ type (
 )
 
 // Open a database project
-func Open(dirPath string) (*MiniDB, error) {
+func Open(dirPath string) (*RoseDB, error) {
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
 			return nil, err
@@ -47,7 +54,7 @@ func Open(dirPath string) (*MiniDB, error) {
 		return nil, err
 	}
 
-	db := &MiniDB{
+	db := &RoseDB{
 		dbFile:  dbFile,
 		indexes: make(map[string]int64),
 		dirPath: dirPath,
@@ -58,7 +65,7 @@ func Open(dirPath string) (*MiniDB, error) {
 }
 
 // loadIndexesFromFile
-func (db *MiniDB) loadIndexesFromFile() {
+func (db *RoseDB) loadIndexesFromFile() {
 	if db.dbFile == nil {
 		return
 	}
@@ -83,15 +90,15 @@ func (db *MiniDB) loadIndexesFromFile() {
 	return
 }
 
-// Close MiniDB file
-func (db *MiniDB) Close() error {
+// Close RoseDB file
+func (db *RoseDB) Close() error {
 	if db.dbFile == nil {
 		return errors.New("invalid db file")
 	}
 	return db.dbFile.File.Close()
 }
 
-func (db *MiniDB) Merge() error {
+func (db *RoseDB) Merge() error {
 	if db.dbFile.Offset == 0 {
 		return nil
 	}
@@ -155,7 +162,7 @@ func (db *MiniDB) Merge() error {
 	return nil
 }
 
-func (db *MiniDB) Put(key []byte, value []byte) (err error) {
+func (db *RoseDB) Put(key []byte, value []byte) (err error) {
 	if len(key) == 0 {
 		return
 	}
@@ -174,7 +181,7 @@ func (db *MiniDB) Put(key []byte, value []byte) (err error) {
 	return
 }
 
-func (db *MiniDB) Get(key []byte) (value []byte, err error) {
+func (db *RoseDB) Get(key []byte) (value []byte, err error) {
 	if len(key) == 0 {
 		return
 	}
@@ -200,7 +207,7 @@ func (db *MiniDB) Get(key []byte) (value []byte, err error) {
 	return
 }
 
-func (db *MiniDB) Del(key []byte) (err error) {
+func (db *RoseDB) Del(key []byte) (err error) {
 	if len(key) == 0 {
 		return
 	}
