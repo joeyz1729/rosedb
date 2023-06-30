@@ -1,7 +1,7 @@
 package index
 
 import (
-	"zouyi/minidb/storage"
+	"zouyi/rosedb/storage"
 )
 
 // Indexer the data index info, stored in skip list.
