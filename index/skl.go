@@ -79,6 +79,7 @@ func (e *Element) Next() *Element {
 
 // Front first element.
 // Get the head element of skl, and get all data by traversing backward.
+//
 //	e := list.Front()
 //	for p := e; p != nil; p = p.Next() {
 //		//do something with Element p
