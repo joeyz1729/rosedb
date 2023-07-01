@@ -11,9 +11,9 @@ import (
 	"sort"
 	"sync"
 	"time"
-	"zouyi/minidb/index"
-	"zouyi/minidb/storage"
-	"zouyi/minidb/utils"
+	"zouyi/rosedb/index"
+	"zouyi/rosedb/storage"
+	"zouyi/rosedb/utils"
 )
 
 type (

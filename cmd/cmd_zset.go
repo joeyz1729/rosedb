@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/roseduan/rosedb"
-	"github.com/roseduan/rosedb/utils"
 	"github.com/tidwall/redcon"
 	"strconv"
 	"strings"
+	"zouyi/rosedb"
+	"zouyi/rosedb/utils"
 )
 
 func zAdd(db *rosedb.RoseDB, args []string) (res interface{}, err error) {

@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"github.com/roseduan/rosedb"
-	"github.com/roseduan/rosedb/ds/list"
 	"github.com/tidwall/redcon"
 	"strconv"
+	"zouyi/rosedb"
+	"zouyi/rosedb/ds/list"
 )
 
 func lPush(db *rosedb.RoseDB, args []string) (res interface{}, err error) {

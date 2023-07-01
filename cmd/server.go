@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"zouyi/minidb"
+	"zouyi/rosedb"
 )
 
 type ExecCmdFunc func(*rosedb.RoseDB, []string) (interface{}, error)

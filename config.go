@@ -1,6 +1,6 @@
 package rosedb
 
-import "zouyi/minidb/storage"
+import "zouyi/rosedb/storage"
 
 type DataIndexMode int
 
@@ -43,7 +43,7 @@ func DefaultConfig() Config {
 		Addr:                   DefaultAddr,
 		DirPath:                DefaultDirPath,
 		BlockSize:              DefaultBlockSize,
-		RwMethod:               storage.FileID,
+		RwMethod:               storage.FileIO,
 		IdxMode:                KeyValueMemMode,
 		MaxKeySize:             DefaultMaxKeySize,
 		MaxValueSize:           DefaultMaxValueSize,
