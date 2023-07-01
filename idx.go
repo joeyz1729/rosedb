@@ -223,7 +223,7 @@ func (db *RoseDB) buildZsetIndex(idx *index.Indexer, entry *storage.Entry) {
 	}
 }
 
-// loadIndexesFromFile
+// loadIndexesFromFile 并发加载各类数据类型的文件index
 func (db *RoseDB) loadIndexesFromFiles() error {
 	if db.archFiles == nil && db.activeFile == nil {
 		return nil
