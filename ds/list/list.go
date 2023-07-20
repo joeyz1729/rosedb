@@ -18,7 +18,7 @@ const (
 )
 
 type (
-	// List list idx.
+	// List idx.
 	List struct {
 		// record saves the List of a specified key.
 		record Record
@@ -61,7 +61,7 @@ func (lis *List) RPop(key string) []byte {
 	return lis.pop(false, key)
 }
 
-// LIndex returns the element at index index in the list stored at key.
+// LIndex returns the element at index in the list stored at key.
 // The index is zero-based, so 0 means the first element, 1 the second element and so on.
 // Negative indices can be used to designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so forth.
 func (lis *List) LIndex(key string, index int) []byte {

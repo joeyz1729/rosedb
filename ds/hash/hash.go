@@ -3,7 +3,7 @@ package hash
 // the implementation of hash table.
 
 type (
-	// Hash hash table struct.
+	// Hash table struct.
 	Hash struct {
 		record Record
 	}
